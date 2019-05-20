@@ -1,0 +1,45 @@
+#!/sbin/openrc-run
+
+name="kubelet"
+command="/usr/bin/kubelet"
+command_args="--config=/var/lib/kubelet/config.yaml --network-plugin=kubenet --allow-privileged --kubeconfig=/etc/kubernetes/kubelet.conf"
+start_stop_daemon_args="--background --make-pidfile --pidfile /var/run/kubelet.pid --stderr /var/log/kubelet.log"
+
+depend() {
+  need docker sysfs cgroups sshd
+}
+
+start_pre() {
+  # Wait until configuration setup
+  while true; do
+    # Test if config files are ready on master
+    if [[ -f /etc/kubernetes/kubelet.conf ]]; then
+      break
+    fi
+
+    # Test if config files are ready on normal node
+    if [[ -f /etc/kubernetes/bootstrap-kubelet.conf ]]; then
+      mv /etc/kubernetes/bootstrap-kubelet.conf /etc/kubernetes/kubelet.conf
+      break
+    fi
+
+    sleep 5
+  done
+
+  # Disable swap
+  /sbin/swapoff -a
+
+  return 0
+}
+
+stop() {
+  ebegin "Stopping custom kubelet"
+                                                         
+  # Kill kubelet daemon                                  
+  start-stop-daemon --stop --pidfile /var/run/kubelet.pid
+                                                  
+  # Kill all k8s containers                       
+  # docker ps | grep -v  “^CONTAINER” | cut -f 1 -d " " | xargs docker kill 
+  # docker ps -a | grep -v  “^CONTAINER” | cut -f 1 -d " " | xargs docker rm
+  return 0
+}
